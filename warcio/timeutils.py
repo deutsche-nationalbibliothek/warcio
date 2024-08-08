@@ -46,17 +46,29 @@ def iso_date_to_datetime(string):
 
     >>> iso_date_to_datetime('2013-12-26T10:11:12.000000Z')
     datetime.datetime(2013, 12, 26, 10, 11, 12)
+
+    >>> iso_date_to_datetime('2013-12-26T10:11:12.000000+02:00')
+    datetime.datetime(2013, 12, 26, 10, 11, 12, timezone(timedelta(hours=2, minutes=0)))
+
+    >>> iso_date_to_datetime('2013-12-26T10:11:12.000000-02:00')
+    datetime.datetime(2013, 12, 26, 10, 11, 12, timezone(timedelta(hours=-2, minutes=0)))
     """
 
     nums = DATE_TIMESPLIT.split(string)
+
+    print(nums)
     if nums[-1] == '':
         nums = nums[:-1]
 
-    if len(nums) == 7:
+    if len(nums) in [8, 9]:
+        tz = datetime.timezone(datetime.timedelta(hours=int(nums[-2]), minutes=int(nums[-1])))
+        nums = nums[:-2] + [tz]
+
+    if len(nums) in [7, 8]:
         nums[6] = nums[6][:6]
         nums[6] += PAD_MICRO[len(nums[6]):]
 
-    the_datetime = datetime.datetime(*(int(num) for num in nums))
+    the_datetime = datetime.datetime(*(int(num) if not isinstance(num, datetime.tzinfo) else num for num in nums))
     return the_datetime
 
 
