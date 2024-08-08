@@ -4,7 +4,6 @@ datetime, iso date and 14-digit timestamp
 """
 
 import re
-import time
 import datetime
 import calendar
 
