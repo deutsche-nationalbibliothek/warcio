@@ -9,7 +9,7 @@ import shutil
 import traceback
 import sys
 import gzip
-
+from io import RawIOBase, BytesIO
 
 # ============================================================================
 class Recompressor(object):
@@ -108,3 +108,35 @@ class StreamRecompressor(Recompressor):
         """Reads a gzip compressed .warc stream (not necessarily propperly chunked) and recompresses it to proppery chunked .warc.gz stream."""
         with gzip.open(self.input, "rb") as input_stream:
             return self._load_and_write_stream(input_stream, self.output)
+
+class RecompressorStream(RawIOBase):
+    def __init__(self, input, verbose=False):
+        self.input = input
+        self.verbose = verbose
+        self.iterator = None
+
+    def get_iterator(self):
+        if not self.iterator:
+            self.iterator = ArchiveIterator(in_stream, no_record_parse=False, arc2warc=True, verify_http=False)
+        return self.iterator
+
+    def next_record(self):
+        return next(self.get_iterator())
+
+    def readable(self):
+        """Tell that this is a readable stream."""
+        return True
+
+    def readinto(self, b):
+        """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
+        out_stream = BytesIO()
+        writer = WARCWriter(filebuf=out_stream, gzip=True)
+
+        if record := self.next_record():
+            writer.write_record(record)
+
+        pos = 0
+        while chunk := out_stream.read():
+            b[pos:len(chunk)] = chunk
+            pos += len(chunk)
+        return pos
