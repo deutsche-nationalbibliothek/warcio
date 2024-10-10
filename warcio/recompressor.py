@@ -1,7 +1,7 @@
 from warcio.archiveiterator import ArchiveIterator
 from warcio.exceptions import ArchiveLoadFailed
 
-from warcio.warcwriter import WARCWriter
+from warcio.warcwriter import WARCWriter, BytesBufferWrapper
 from warcio.bufferedreaders import DecompressingBufferedReader
 
 import tempfile
@@ -114,14 +114,7 @@ class RecompressorStream(RawIOBase):
         self.input = input
         self.verbose = verbose
         self.iterator = None
-
-    def get_iterator(self):
-        if not self.iterator:
-            self.iterator = ArchiveIterator(in_stream, no_record_parse=False, arc2warc=True, verify_http=False)
-        return self.iterator
-
-    def next_record(self):
-        return next(self.get_iterator())
+        self.processed_records = 0
 
     def readable(self):
         """Tell that this is a readable stream."""
@@ -129,14 +122,11 @@ class RecompressorStream(RawIOBase):
 
     def readinto(self, b):
         """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
-        out_stream = BytesIO()
+        out_stream = BytesBufferWrapper(b)
         writer = WARCWriter(filebuf=out_stream, gzip=True)
 
-        if record := self.next_record():
+        for record in ArchiveIterator(self.input, no_record_parse=False, arc2warc=True, verify_http=False):
             writer.write_record(record)
+            self.processed_records += 1
 
-        pos = 0
-        while chunk := out_stream.read():
-            b[pos:len(chunk)] = chunk
-            pos += len(chunk)
-        return pos
+        return len(out_stream)
