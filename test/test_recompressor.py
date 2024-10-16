@@ -101,3 +101,14 @@ def test_recompressor_stream(tmp_path):
             output.write(chunk)
     assert stream.processed_records == 3
     assert os.path.getsize(tmp_file) > 0
+
+def test_recompressor_stream_on_uncompressed_warc(tmp_path):
+    """Uncompress a badly chunked stream with gzip befor feeding it to a RecompressorStream and write it to a file."""
+    test_file = get_test_file('example-bad-non-chunked.warc.gz')
+    tmp_file = tmp_path / "output.warc.gz"
+    with gzip.open(test_file, "rb") as input, open(tmp_file, "wb") as output:
+        stream = RecompressorStream(input, verbose=True)
+        while chunk := stream.read():
+            output.write(chunk)
+    assert stream.processed_records == 6
+    assert os.path.getsize(tmp_file) > 0
