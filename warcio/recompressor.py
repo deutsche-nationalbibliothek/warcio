@@ -1,7 +1,7 @@
 from warcio.archiveiterator import ArchiveIterator
 from warcio.exceptions import ArchiveLoadFailed
 
-from warcio.warcwriter import WARCWriter
+from warcio.warcwriter import WARCWriter, BytesBufferWrapper
 from warcio.bufferedreaders import DecompressingBufferedReader
 
 import tempfile
@@ -9,7 +9,7 @@ import shutil
 import traceback
 import sys
 import gzip
-
+from io import RawIOBase, BytesIO
 
 # ============================================================================
 class Recompressor(object):
@@ -108,3 +108,25 @@ class StreamRecompressor(Recompressor):
         """Reads a gzip compressed .warc stream (not necessarily propperly chunked) and recompresses it to proppery chunked .warc.gz stream."""
         with gzip.open(self.input, "rb") as input_stream:
             return self._load_and_write_stream(input_stream, self.output)
+
+class RecompressorStream(RawIOBase):
+    def __init__(self, input, verbose=False):
+        self.input = input
+        self.verbose = verbose
+        self.iterator = None
+        self.processed_records = 0
+
+    def readable(self):
+        """Tell that this is a readable stream."""
+        return True
+
+    def readinto(self, b):
+        """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
+        out_stream = BytesBufferWrapper(b)
+        writer = WARCWriter(filebuf=out_stream, gzip=True)
+
+        for record in ArchiveIterator(self.input, no_record_parse=False, arc2warc=True, verify_http=False):
+            writer.write_record(record)
+            self.processed_records += 1
+
+        return len(out_stream)
