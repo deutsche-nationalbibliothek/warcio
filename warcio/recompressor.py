@@ -1,7 +1,7 @@
 from warcio.archiveiterator import ArchiveIterator
 from warcio.exceptions import ArchiveLoadFailed
 
-from warcio.warcwriter import WARCWriter, BytesBufferWrapper
+from warcio.warcwriter import WARCWriter
 from warcio.bufferedreaders import DecompressingBufferedReader
 
 import tempfile
@@ -9,7 +9,7 @@ import shutil
 import traceback
 import sys
 import gzip
-from io import RawIOBase, BytesIO
+from io import RawIOBase, BytesIO, BufferedIOBase
 
 # ============================================================================
 class Recompressor(object):
@@ -109,15 +109,33 @@ class StreamRecompressor(Recompressor):
         with gzip.open(self.input, "rb") as input_stream:
             return self._load_and_write_stream(input_stream, self.output)
 
+
+class CustomBufferedIO(BufferedIOBase):
+    def __init__(self):
+        self._buffer = bytearray()
+
+    def write(self, data):
+        if isinstance(data, str):
+            data = data.encode()
+        self._buffer.extend(data)
+        return len(data)
+
+    def read(self, size=-1):
+        if size < 0:
+            result = bytes(self._buffer)
+            self._buffer.clear()
+            return result
+        result = bytes(self._buffer[:size])
+        self._buffer = self._buffer[size:]
+        return result
+
 class RecompressorStream(RawIOBase):
     def __init__(self, input):
         self.input = input
         self.iterator = ArchiveIterator(self.input, no_record_parse=False, arc2warc=True, verify_http=False)
         self.processed_records = 0
-        self.bytes_io = BytesIO()
-        self.bytes_io = BytesIO()
+        self.bytes_io = CustomBufferedIO()
         self.writer = WARCWriter(filebuf=self.bytes_io, gzip=True)
-        self.view_pos = 0
 
     def readable(self):
         """Tell that this is a readable stream."""
@@ -127,17 +145,14 @@ class RecompressorStream(RawIOBase):
         """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
 
         try:
-            while self.bytes_io.tell() - self.view_pos < len(b):
+            while self.bytes_io.tell() < len(b):
                 self.readon()
-                view = self.bytes_io.getvalue()
         except StopIteration:
             pass
 
         write_pos = self.bytes_io.tell()
-        self.bytes_io.seek(self.view_pos)
+        self.bytes_io.seek(0)
         read_range = self.bytes_io.readinto(b)
-        self.view_pos += read_range
-
         self.bytes_io.seek(write_pos)
 
         return read_range
