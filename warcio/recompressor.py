@@ -115,6 +115,7 @@ class RecompressorStream(RawIOBase):
         self.iterator = ArchiveIterator(self.input, no_record_parse=False, arc2warc=True, verify_http=False)
         self.processed_records = 0
         self.bytes_io = BytesIO()
+        self.bytes_io = BytesIO()
         self.writer = WARCWriter(filebuf=self.bytes_io, gzip=True)
         self.view_pos = 0
 
@@ -125,21 +126,19 @@ class RecompressorStream(RawIOBase):
     def readinto(self, b):
         """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
 
-        if not self.view_pos:
-            self.readon()
-
         try:
-            view = self.bytes_io.getvalue()
-            while len(view[self.view_pos:]) < len(b):
+            while self.bytes_io.tell() - self.view_pos < len(b):
                 self.readon()
                 view = self.bytes_io.getvalue()
         except StopIteration:
             pass
 
-        view = self.bytes_io.getvalue()
-        read_range = min(len(view[self.view_pos:]), len(b))
-        b[:read_range] = view[self.view_pos:self.view_pos+read_range]
+        write_pos = self.bytes_io.tell()
+        self.bytes_io.seek(self.view_pos)
+        read_range = self.bytes_io.readinto(b)
         self.view_pos += read_range
+
+        self.bytes_io.seek(write_pos)
 
         return read_range
 
