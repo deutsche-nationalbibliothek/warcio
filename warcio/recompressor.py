@@ -9,7 +9,7 @@ import shutil
 import traceback
 import sys
 import gzip
-from io import RawIOBase, BytesIO, BufferedIOBase
+from io import RawIOBase, BufferedIOBase
 
 # ============================================================================
 class Recompressor(object):
@@ -109,14 +109,22 @@ class StreamRecompressor(Recompressor):
         with gzip.open(self.input, "rb") as input_stream:
             return self._load_and_write_stream(input_stream, self.output)
 
-
-class CustomBufferedIO(BufferedIOBase):
+class BufferedRWIO(BufferedIOBase):
     def __init__(self):
         self._buffer = bytearray()
 
+    def readable(self):
+        """Tell that this is a readable stream."""
+        return True
+
+    def writable(self):
+        """Tell that this is a writable stream."""
+        return True
+
+    def tell(self):
+        return len(self._buffer)
+
     def write(self, data):
-        if isinstance(data, str):
-            data = data.encode()
         self._buffer.extend(data)
         return len(data)
 
@@ -134,8 +142,8 @@ class RecompressorStream(RawIOBase):
         self.input = input
         self.iterator = ArchiveIterator(self.input, no_record_parse=False, arc2warc=True, verify_http=False)
         self.processed_records = 0
-        self.bytes_io = CustomBufferedIO()
-        self.writer = WARCWriter(filebuf=self.bytes_io, gzip=True)
+        self.io_buffer = BufferedRWIO()
+        self.writer = WARCWriter(filebuf=self.io_buffer, gzip=True)
 
     def readable(self):
         """Tell that this is a readable stream."""
@@ -145,17 +153,12 @@ class RecompressorStream(RawIOBase):
         """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
 
         try:
-            while self.bytes_io.tell() < len(b):
+            while self.io_buffer.tell() < len(b):
                 self.readon()
         except StopIteration:
             pass
 
-        write_pos = self.bytes_io.tell()
-        self.bytes_io.seek(0)
-        read_range = self.bytes_io.readinto(b)
-        self.bytes_io.seek(write_pos)
-
-        return read_range
+        return self.io_buffer.readinto(b)
 
     def readon(self):
         record = next(self.iterator)
