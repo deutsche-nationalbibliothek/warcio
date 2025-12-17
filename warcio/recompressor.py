@@ -9,7 +9,7 @@ import shutil
 import traceback
 import sys
 import gzip
-
+from io import RawIOBase, BufferedIOBase
 
 # ============================================================================
 class Recompressor(object):
@@ -108,3 +108,59 @@ class StreamRecompressor(Recompressor):
         """Reads a gzip compressed .warc stream (not necessarily propperly chunked) and recompresses it to proppery chunked .warc.gz stream."""
         with gzip.open(self.input, "rb") as input_stream:
             return self._load_and_write_stream(input_stream, self.output)
+
+class BufferedRWIO(BufferedIOBase):
+    def __init__(self):
+        self._buffer = bytearray()
+
+    def readable(self):
+        """Tell that this is a readable stream."""
+        return True
+
+    def writable(self):
+        """Tell that this is a writable stream."""
+        return True
+
+    def tell(self):
+        return len(self._buffer)
+
+    def write(self, data):
+        self._buffer.extend(data)
+        return len(data)
+
+    def read(self, size=-1):
+        if size < 0:
+            result = bytes(self._buffer)
+            self._buffer.clear()
+            return result
+        result = bytes(self._buffer[:size])
+        self._buffer = self._buffer[size:]
+        return result
+
+class RecompressorStream(RawIOBase):
+    def __init__(self, input):
+        self.input = input
+        self.iterator = ArchiveIterator(self.input, no_record_parse=False, arc2warc=True, verify_http=False)
+        self.processed_records = 0
+        self.io_buffer = BufferedRWIO()
+        self.writer = WARCWriter(filebuf=self.io_buffer, gzip=True)
+
+    def readable(self):
+        """Tell that this is a readable stream."""
+        return True
+
+    def readinto(self, b):
+        """Iterate the input WARC stream to load it and write it as compressed chunked .warc.gz steam to be read from this stream."""
+
+        try:
+            while self.io_buffer.tell() < len(b):
+                self.readon()
+        except StopIteration:
+            pass
+
+        return self.io_buffer.readinto(b)
+
+    def readon(self):
+        record = next(self.iterator)
+        self.writer.write_record(record)
+        self.processed_records += 1

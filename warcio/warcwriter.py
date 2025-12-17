@@ -110,6 +110,23 @@ class BaseWARCWriter(RecordBuilder):
 
 
 # ============================================================================
+class BytesBufferWrapper(object):
+    def __init__(self, b):
+        self.b = b
+        self.pos = 0
+
+    def write(self, buff):
+        self.b[self.pos:len(buff)] = buff
+        self.pos += len(buff)
+
+    def __len__(self):
+        return self.pos
+
+    def flush(self):
+        pass
+
+
+# ============================================================================
 class GzippingWrapper(object):
     def __init__(self, out):
         self.compressor = zlib.compressobj(9, zlib.DEFLATED, zlib.MAX_WBITS + 16)
@@ -157,5 +174,3 @@ class BufferWARCWriter(WARCWriter):
     def get_stream(self):
         self.out.seek(0)
         return self.out
-
-
