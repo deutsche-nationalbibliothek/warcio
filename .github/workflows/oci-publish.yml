@@ -24,14 +24,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            containerfile: Containerfile
+          - containerfile: Containerfile
             suffix: ""
-          - image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            containerfile: Containerfile.s3
+          - containerfile: Containerfile.s3
             suffix: "s3"
-          - image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            containerfile: Containerfile.all
+          - containerfile: Containerfile.all
             suffix: "all"
 
     permissions:
@@ -73,7 +70,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
             latest=auto
             prefix=
