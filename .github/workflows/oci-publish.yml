@@ -27,9 +27,9 @@ jobs:
           - containerfile: Containerfile
             suffix: ""
           - containerfile: Containerfile.s3
-            suffix: "s3"
+            suffix: "-s3"
           - containerfile: Containerfile.all
-            suffix: "all"
+            suffix: "-all"
 
     permissions:
       contents: read
