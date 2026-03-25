@@ -28,6 +28,8 @@ jobs:
             suffix: ""
           - containerfile: Containerfile.s3
             suffix: "-s3"
+          - containerfile: Containerfile.airflow
+            suffix: "-airflow"
           - containerfile: Containerfile.all
             suffix: "-all"
 
